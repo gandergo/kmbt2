@@ -1,0 +1,497 @@
+<!DOCTYPE html>
+<html ng-app="app">
+  <head>
+    <title><%= title %></title>
+    <link rel='stylesheet' href='/stylesheets/style.css' />
+    <style>
+    #playlist,audio{background:#666;width:400px;}
+    /*.active a {color:#5DB0E6;text-decoration:none;*/
+    .active {background-color:lightgreen;}
+    /*li a{color:#eeeedd;background:#333;padding:5px;display:block;}*/
+    #playlist li {list-style-type: none;}
+    #playlist {padding: 0; margin-top:0}
+    li div {color:#eeeedd;background:#333;padding:5px;}
+    li div a:hover{text-decoration:none;}    
+    span.editButton {float:right;}
+    </style>
+  </head>
+  <body>
+    <h1><%= title %></h1>
+
+    <ng-view></ng-view>
+
+    <!-- Libraries -->
+    <script src="https://ajax.googleapis.com/ajax/libs/angularjs/1.4.8/angular.min.js"></script>
+    <script src="https://ajax.googleapis.com/ajax/libs/angularjs/1.4.8/angular-route.min.js"></script>
+    <script src="https://ajax.googleapis.com/ajax/libs/angularjs/1.4.8/angular-resource.min.js"></script>
+    
+    <script type="text/javascript">
+        if (window.location.hash && window.location.hash == '#_=_') {
+            //window.location.hash = '';
+            history.replaceState(undefined, undefined, '#');
+        }
+    </script>
+
+    <!-- Template -->
+    <script type="text/ng-template" id="/songs.html">
+      <button ng-click="refresh()">Refresh</button>
+      Search: <br />
+      Name: <input type="text" ng-model="search.name">
+      <!--Status: <select ng-model="search.status" ng-options="status as status for status in statusList"><option text="" value=""></option></select>--><br/>
+      <!--Lyrics: <input type="text" ng-model="search.lyrics"><br/>-->
+      Song Writer: <select ng-model="songwriter" ng-options="member.fbId as member.name for member in memberList"><option text="" value=""></option></select>
+      Lyrics Writer: <select ng-model="lyricswriter" ng-options="member.fbId as member.name for member in memberList"><option text="" value=""></option></select>
+      Singer: <select ng-model="singer" ng-options="member.fbId as member.name for member in memberList"><option text="" value=""></option></select>
+      
+      <ul style="display:none">
+        <li ng-repeat="song in songs | filter: search | filter:hasSongWriter">
+          <!--<input type="text" ng-model="song.status">-->
+          <a href="#/{{song._id}}">{{song.name}}</a>
+        </li>
+      </ul>
+     
+    <br/>
+    <!--<audio id="audio" preload="auto" tabindex="0" controls="" type="audio/mpeg">
+        <source type="audio/mp3" src="{{songs[activeIndex].audioUrls[0].url | trustAsResourceUrl}}">
+        Sorry, your browser does not support HTML5 audio.
+    </audio>-->
+    <span ng-bind="(songs | filter: search | involveMember:'songwriter':songwriter | involveMember: 'lyricswriter':lyricswriter | involveMember: 'singer':singer).length"></span> songs
+    <br/>
+    <audio id="audio" ng-src="{{((songs | filter: search | involveMember:'songwriter':songwriter | involveMember: 'lyricswriter':lyricswriter | involveMember: 'singer':singer)[activeIndex].audioUrls | filter: {sequence: 1})[0].url + '?raw=1' | trustAsResourceUrl}}" controls></audio>
+    <ul id="playlist">
+        <!--<li class="active"><a href="http://www.archive.org/download/bolero_69/Bolero.mp3">Ravel Bolero</a></li>-->
+        <li ng-repeat="song in songs | filter: search | involveMember:'songwriter':songwriter | involveMember: 'lyricswriter':lyricswriter | involveMember: 'singer':singer">
+          <div ng-class="{active: $index == activeIndex}">
+          <a href="{{(song.audioUrls | filter: {sequence: 1})[0].url}}" ng:click="audioLinkClicked($index, $event)">{{song.name}}</a>
+          <span class="editButton">
+            <a href="{{(song.audioUrls | filter: {sequence: 1})[0].url + '?dl=1'}}">Download</a>
+            <a href="{{song.folderUrl}}">Dropbox</a>
+            <a href="#/{{song._id}}">Edit</a>
+          </span>
+          </div>
+          <div style="white-space: pre;" ng-bind="song.lyrics" ng-show="$index == activeIndex"></div>
+        </li>
+        <!--<li class="active"><a href="http://www.archive.org/download/bolero_69/Bolero.mp3">Ravel Bolero</a></li>
+        <li><a href="http://www.archive.org/download/MoonlightSonata_755/Beethoven-MoonlightSonata.mp3">Moonlight Sonata - Beethoven</a></li>
+        <li><a href="http://www.archive.org/download/CanonInD_261/CanoninD.mp3">Canon in D Pachabel</a></li>
+        <li><a href="http://www.archive.org/download/PatrikbkarlChamberSymph/PatrikbkarlChamberSymph_vbr_mp3.zip">patrikbkarl chamber symph</a></li>
+        -->
+    </ul>
+    
+    New Song: <input type="text" ng-model="newSong"><button ng-click="save()">Create</button>
+      
+    </script>
+
+    <script type="text/ng-template" id="/songDetails.html">
+      <h1>{{ song.name }}</h1><input type="text" ng-model="song.name">
+      <button ng-click="updateSong()">Update</button><button onclick="window.location = '/'">Back</button>
+      status: <select ng-model="song.status" ng-options="status for status in statusList"><option value=""></option></select><br/>
+      lyrics: <textarea ng-model="song.lyrics" style="width:70%;height:200px"></textarea>
+      <br />
+      <a href="{{song.folderUrl | trustAsResourceUrl}}">Resource Folder</a>
+      Folder: <input type="text" ng-model="song.folderUrl">
+      <br />
+      <div ng-repeat="audioUrl in song.audioUrls">
+          <audio ng-src="{{audioUrl.url + '?raw=1' | trustAsResourceUrl}}"  controls loop></audio><!--autoplay -->
+          <a href="{{audioUrl.url + '?dl=1'}}">Download</a>
+          <br />
+          audioUrl: <input type="text" ng-model="audioUrl.url">
+          description: <input type="text" ng-model="audioUrl.description">
+          sequence: <input type="text" ng-model="audioUrl.sequence">
+          <button ng-click="updateAudioUrl($index)">Edit</button><button ng-click="deleteAudioUrl($index)">Delete</button>
+      </div> 
+      <div ng-hide="song.audioUrls.length">No audio</div>     
+      New Audio Url: <input type="text" ng-model="newAudioUrl"><button ng-click="saveAudioUrl()">Add</button>
+      
+      <div ng-repeat="videoUrl in song.videoUrls">
+          <iframe id="ytplayer" type="text/html" width="640" height="390"
+            src="{{'https://www.youtube.com/embed/' + videoUrl.split('watch?v=')[1] | trustAsResourceUrl}}"
+            frameborder="0"></iframe><!-- + '?autoplay=1' -->
+          videoUrl: <input type="text" ng-model="song.videoUrls[$index]"><button ng-click="updateVideoUrl($index)">Edit</button><button ng-click="deleteVideoUrl($index)">Delete</button>
+      </div> 
+      <div ng-hide="song.videoUrls.length">No video</div>     
+      New Video Url: <input type="text" ng-model="newVideoUrl"><button ng-click="saveVideoUrl()">Add</button>
+      
+      <div ng-repeat="comment in song.comments">
+          Comment by: <span ng-bind="comment.createUid"></span>
+          Content: <textarea ng-model="comment.body" readonly></textarea><!--<button ng-click="updateComment($index)">Edit</button>--><button ng-click="deleteComment($index)">Delete</button>
+      </div> 
+      <div ng-hide="song.comments.length">No Comment</div>     
+      New Comment: <textarea ng-model="newComment"></textarea><button ng-click="saveComment()">Add</button>
+    </script>
+
+    <script>
+      angular.module('app', ['ng', 'ngRoute', 'ngResource'])
+      //ref: http://stackoverflow.com/questions/24163152/angularjs-ng-src-inside-of-iframe
+        .filter('trustAsResourceUrl', ['$sce', function($sce) {
+                return function(val) {
+                    return $sce.trustAsResourceUrl(val);
+                };
+            }])
+        
+        .filter('involveMember', function(){
+            return function(songs, involveType, member){
+                if(member == "" || member == null)    return songs;
+                return songs.filter(function(song) {
+                        return ((involveType == "songwriter" && song.songwriter.indexOf(member) > -1) 
+                            || (involveType == "lyricswriter" && song.lyricswriter.indexOf(member) > -1)
+                            || (involveType == "singer" && song.singer.indexOf(member) > -1));
+                    });
+            };
+        })
+      
+        //---------------
+        // Services
+        //---------------
+
+        .factory('Songs', ['$resource', function($resource){
+          return $resource('/songs/:id', null, {
+            update:{method:'PUT'}
+          });
+        }])
+       
+        .factory('StatusList', ['$http', function($http){
+            /*
+            var statusList = [];
+            
+            $http.get('/songs/statusList/list').then(
+                function successCallback(response) {
+                    // this callback will be called asynchronously
+                    // when the response is available.
+                    //console.log('todos: ', data );
+                    statusList = response.data;
+                }, function errorCallback(response) {
+                    // called asynchronously if an error occurs
+                    // or server returns response with an error status.
+                    statusList = [];
+                    console.log('Get Status List error', response.data);
+                }
+            );
+            
+            return statusList;*/
+            return $http.get('/songs/statusList/list');
+        }])
+        
+        .factory('MemberList', function(){
+           return [{name: "Chris", fbId: "509846744"}, {name: "Germing", fbId: "564940779"}, {name: "Iris", fbId: "516014768"}, {name: "NgauNam", fbId: "659440430"}, {name: "Tommy", fbId: "660440533"}]; 
+        })
+        
+        
+        //---------------
+        // Controllers
+        //---------------
+
+        .controller('SongController', ['$scope', '$filter', 'Songs', 'StatusList', "MemberList", function ($scope, $filter, Songs, StatusList, MemberList) {
+          $scope.editing = [];
+          $scope.songs = Songs.query();
+          $scope.memberList = MemberList;
+          //$scope.statusList = StatusList;
+          
+          StatusList.then(
+                function successCallback(response) {
+                    // this callback will be called asynchronously
+                    // when the response is available.
+                    //console.log('todos: ', data );
+                    //response.data.unshift(null);
+                    $scope.statusList = response.data;
+                }, function errorCallback(response) {
+                    // called asynchronously if an error occurs
+                    // or server returns response with an error status.
+                    $scope.statusList = [];
+                    console.log('Get Status List error', response.data);
+                }
+            );
+          
+          //alert(StatusList);
+          //$http({method: 'GET', url: '/songs/statusList/list'}).then(
+          /*
+          $http.get({url: '/songs/statusList/list'}).then(
+                function successCallback(response) {
+                    // this callback will be called asynchronously
+                    // when the response is available.
+                    //console.log('todos: ', data );
+                    $scope.statusList = response.data;
+                }, function errorCallback(response) {
+                    // called asynchronously if an error occurs
+                    // or server returns response with an error status.
+                    $scope.statusList = [];
+                    console.log('Get Status List error', response.data);
+                }
+            );
+          */
+          
+          /*
+            success(function(data, status, headers, config) {
+                // this callback will be called asynchronously
+                // when the response is available.
+                //console.log('todos: ', data );
+                $scope.statusList = data;
+            }).
+            error(function(data, status, headers, config) {
+                // called asynchronously if an error occurs
+                // or server returns response with an error status.
+                $scope.statusList = [];
+                console.log('Get Status List error', data);
+            });
+          */
+          
+          $scope.save = function(){
+            if(!$scope.newSong || $scope.newSong.length < 1) return;
+            
+            var song = new Songs({name:$scope.newSong, status:"Lyrics"});
+            
+            song.$save(function(){
+              $scope.songs.push(song);
+              $scope.newSong = "";  //clear textbox
+            });
+          };
+          
+          $scope.update = function(index){
+                var song = $scope.songs[index];
+                Songs.update({id: song._id}, song);
+                $scope.editing[index] = false;
+            }
+
+            $scope.edit = function(index){
+                $scope.editing[index] = angular.copy($scope.songs[index]);
+            }
+
+            $scope.cancel = function(index){
+                $scope.songs[index] = angular.copy($scope.editing[index]);
+                $scope.editing[index] = false;
+            }
+          
+          //http://jsfiddle.net/WsXX3/33/
+          /*$scope.audio = null;
+          $scope.playlist = null;
+          $scope.tracks = null;
+          $scope.current = null;*/
+          //$scope.activeIndex = 0;
+          
+          function initPlayer(){
+              $scope.activeIndex = 0;
+              $scope.audio = document.getElementsByTagName('audio');
+              //len = $scope.songs.length;
+              //var filteredSongs = $filter("search")($scope.song);
+              var filteredSongs = $filter("involveMember")($scope.songs,"songwriter",$scope.songwriter);
+              filteredSongs = $filter("involveMember")(filteredSongs,"lyricswriter",$scope.lyricswriter);
+              filteredSongs = $filter("involveMember")(filteredSongs,"singer",$scope.singer);
+              len = filteredSongs.length;
+              
+              $scope.audio[0].addEventListener('ended',function(e){
+                $scope.activeIndex++;
+                if($scope.activeIndex == len){
+                    $scope.activeIndex = 0;
+                    //link = $scope.playlist.find('a')[0];
+                }else{
+                    //link = $scope.playlist.find('a')[$scope.current];    
+                }
+                $scope.$digest();     //http://stackoverflow.com/questions/11873627/angularjs-ng-model-binding-not-updating-when-changed-with-jquery
+                playAudio($scope.activeIndex);
+              });
+          };
+          
+          function playAudio(index)
+          {
+              //$scope.audioSrc = $scope.songs[index].audioUrls.filter(function(audioUrl){return audioUrl.sequence == 1})[0].url
+              $scope.activeIndex = index;
+              //alert($scope.audioSrc);
+              //alert($scope.audio[0].src);
+              //alert(index);
+              //$scope.audio[0].src  = $scope.songs[index].audioUrls.filter(function(audioUrl){return audioUrl.sequence == 1})[0].url + '?raw=1';
+              $scope.audio[0].load();
+              $scope.audio[0].play();
+          }
+          
+          $scope.audioLinkClicked = function(index, event){
+              event.preventDefault();
+              playAudio(index);
+          }
+          
+          /*function init(){
+            $scope.current = 0;
+            $scope.audio = angular.element('audio');
+            $scope.playlist = angular.element('#playlist');
+            $scope.tracks = $scope.playlist.find('li a');
+            len = $scope.tracks.length - 1;
+            $scope.audio[0].volume = .10;
+            $scope.audio[0].play();
+            $scope.playlist.find('a').click(function(e){
+                e.preventDefault();
+                link = angular.element(this);
+                $scope.current = link.parent().index();
+                run(link, $scope.audio[0]);
+            });
+            $scope.audio[0].addEventListener('ended',function(e){
+                $scope.current++;
+                if($scope.current == len){
+                    $scope.current = 0;
+                    link = $scope.playlist.find('a')[0];
+                }else{
+                    link = $scope.playlist.find('a')[$scope.current];    
+                }
+                run(angular.element(link),$scope.audio[0]);
+            });
+        }
+        function run (link, player){
+                player.src = link.attr('href');
+                par = link.parent();
+                par.addClass('active').siblings().removeClass('active');
+                $scope.audio[0].load();
+                $scope.audio[0].play();
+        }*/
+        
+            initPlayer();
+
+            $scope.songwriter = "";
+            $scope.lyricswriter = "";
+            $scope.singer = "";
+
+            //ref: http://stackoverflow.com/questions/11753321/passing-arguments-to-angularjs-filters
+            //http://stackoverflow.com/questions/18792039/angularjs-multiple-filter-with-custom-filter-function
+            $scope.hasSongwriter = function(song){
+                return (song.songwriter.indexOf($scope.songwriter) > -1);
+            }
+            
+            $scope.refresh = function(){
+                window.location.reload();
+                //$scope.$apply();
+            };
+
+        }])
+
+        .controller('SongDetailCtrl', ['$scope', '$routeParams', 'Songs', 'StatusList', function ($scope, $routeParams, Songs, StatusList) {
+          //$scope.song = Songs[$routeParams.id];
+          //$scope.song = Songs.query()[$routeParams.id];
+          //alert(Songs.status);
+          //alert(Object.prototype.toString.call(Songs.query()));
+          //alert(Object.prototype.toString.call(Songs.query()));
+          //alert(Songs.query().length);
+          //alert(Songs.get().status);
+          //$scope.song = Songs.get({index:$routeParams.id})[0];
+          //alert(Songs.get({index:$routeParams.id})["status"]);
+          //alert(Object.prototype.toString.call(Songs.query()));
+          
+          $scope.song = Songs.get({id:$routeParams.id});
+          //$scope.song.audioUrls = ['test'];
+          
+          StatusList.then(
+                function successCallback(response) {
+                    // this callback will be called asynchronously
+                    // when the response is available.
+                    //console.log('todos: ', data );
+                    //response.data.unshift(null);
+                    $scope.statusList = response.data
+                }, function errorCallback(response) {
+                    // called asynchronously if an error occurs
+                    // or server returns response with an error status.
+                    $scope.statusList = [];
+                    console.log('Get Status List error', response.data);
+                }
+            );
+          
+          
+          $scope.updateSong = function(){
+              //alert('test');
+              var song = $scope.song;
+              //var id = song._id;
+              //delete(song._id);
+              //Songs.update({id: id}, song);  
+              Songs.update({id: song._id}, song);
+          };
+          
+          //Audio
+          $scope.saveAudioUrl = function(){
+              if(!$scope.newAudioUrl || $scope.newAudioUrl.length < 1) return;
+              
+              var song = $scope.song;
+              song.audioUrls.push({url:$scope.newAudioUrl});
+              Songs.update({id: song._id}, song);
+              
+              $scope.newAudioUrl = "";
+          };
+          
+          $scope.updateAudioUrl = function(index) {
+              var song = $scope.song;
+              Songs.update({id: song._id}, song);
+          };
+          
+          $scope.deleteAudioUrl = function(index){
+              var song = $scope.song;
+              song.audioUrls.splice(index, 1);
+              Songs.update({id: song._id}, song);
+          }
+          
+          //Video
+          $scope.saveVideoUrl = function(){
+              if(!$scope.newVideoUrl || $scope.newVideoUrl.length < 1) return;
+              
+              var song = $scope.song;
+              song.videoUrls.push($scope.newVideoUrl);
+              Songs.update({id: song._id}, song);
+              
+              $scope.newVideoUrl = "";
+          };
+          
+          $scope.updateVideoUrl = function(index) {
+              var song = $scope.song;
+              Songs.update({id: song._id}, song);
+          };
+          
+          $scope.deleteVideoUrl = function(index){
+              var song = $scope.song;
+              song.videoUrls.splice(index, 1);
+              Songs.update({id: song._id}, song);
+          }
+          
+          //Comment
+          $scope.saveComment = function(){
+              if(!$scope.newComment || $scope.newComment.length < 1) return;
+              
+              var song = $scope.song;
+              var commentObj = {};
+              commentObj.body = $scope.newComment;
+              song.comments.push(commentObj);
+              Songs.update({id: song._id}, song);
+              
+              $scope.newComment = "";
+          };
+          
+          $scope.updateComment = function(index) {
+              var song = $scope.song;
+              Songs.update({id: song._id}, song);
+          };
+          
+          $scope.deleteComment = function(index){
+              var song = $scope.song;
+              song.comments.splice(index, 1);
+              Songs.update({id: song._id}, song);
+          }
+          
+          //alert($scope.song.audioUrls[0]);
+          
+          //if(Songs[$routeParams.id].audioUrls == undefined)
+          //{
+              //Songs[$routeParams.id].audioUrls = ['test'];
+          //}
+        }])
+
+        //---------------
+        // Routes
+        //---------------
+
+        .config(['$routeProvider', function ($routeProvider) {
+          $routeProvider
+            .when('/', {
+              templateUrl: '/songs.html',
+              controller: 'SongController'
+            })
+
+            .when('/:id', {
+              templateUrl: '/songDetails.html',
+              controller: 'SongDetailCtrl'
+           });
+        }]);
+    </script>
+  </body>
+</html>
